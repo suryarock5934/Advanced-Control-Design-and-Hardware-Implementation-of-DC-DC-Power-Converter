@@ -1,0 +1,314 @@
+function P = ConverterModel(converter,Vi,Vo,R,L,C,Rc,Rl,fs)
+%% Calculates converter parameters 
+
+P.converter = converter;
+
+%% Basic Parameters
+
+P.Vi = Vi;
+P.Vo = Vo;
+P.R  = R;
+P.L  = L;
+P.C  = C;
+P.Rc = Rc;
+P.Rl = Rl;
+P.fs = fs;
+
+P.ws = 2*pi*fs;
+
+%% Duty Ratio
+
+switch lower(converter)
+
+    case 'buck'
+
+        D = Vo/Vi;
+
+    case 'boost'
+
+        D = 1 - Vi/Vo;
+
+    case 'buckboost'
+
+        D = Vo/(Vi + Vo);
+
+    otherwise
+
+        error('Unknown Converter');
+
+end
+
+P.D = D;
+
+%% ==========================================================
+% Inductor Current
+%% ==========================================================
+
+switch lower(converter)
+
+    case 'buck'
+
+        % Average Output Current
+        Io = Vo/R;
+
+        % Inductor Ripple Current
+        dIL = (Vi)*P.D/(L*fs);
+
+        % Average Inductor Current
+        ILavg = Io;
+
+        % Peak Inductor Current
+        P.ILpeak = ILavg + dIL/2;
+
+    case 'boost'
+
+        % Average Output Current
+        Io = Vo/R;
+
+        % Average Inductor Current
+        ILavg = Io/(1-P.D);
+
+        % Inductor Ripple Current
+        dIL = Vi*P.D/(L*fs);
+
+        % Peak Inductor Current
+        P.ILpeak = ILavg + dIL/2;
+
+    case 'buckboost'
+
+        % Average Output Current
+        Io = Vo/R;
+
+        % Average Inductor Current
+        ILavg = Io/(1-P.D);
+
+        % Inductor Ripple Current
+        dIL = Vi*P.D/(L*fs);
+
+        % Peak Inductor Current
+        P.ILpeak = ILavg + dIL/2;
+
+end
+
+%% DC Gains
+
+switch lower(converter)
+
+    case 'buck'
+
+        P.Kvs = D;
+        P.Kvd = Vi;
+        P.Kis = D/R;
+        P.Kid = Vi/R;
+
+        P.Kp = Rl;
+        P.Kq = -1;
+
+    case 'boost'
+
+        P.Kvs = 1/(1-D);
+
+        P.Kvd = Vi/(1-D)^2;
+
+        P.Kis = 1/((1-D)^2*R);
+
+        P.Kid = 2*Vi/((1-D)^3*R);
+
+        P.Kp = Rl/(1-D)^2;
+
+        P.Kq = -1/(1-D);
+
+    case 'buckboost'
+
+        P.Kvs = D/(1-D);
+
+        P.Kvd = Vi/(1-D)^2;
+
+        P.Kis = D/((1-D)^2*R);
+
+        P.Kid = Vi*(1+D)/((1-D)^3*R);
+
+        P.Kp = Rl/(1-D)^2;
+
+        P.Kq = -1/(1-D);
+
+end
+
+%% Corner Frequencies
+
+switch lower(converter)
+
+    case 'buck'
+
+        P.wesr = 1/(C*Rc);
+
+        P.wrhp = inf;
+
+        P.wis = 1/(C*R);
+
+        P.wid = 1/(C*R);
+
+        P.wz = RL/L;
+
+        P.w0 = 1/sqrt(L*C);
+
+        P.Q = R*sqrt(C/L);
+
+    case 'boost'
+
+        P.wesr = 1/(C*Rc);
+
+        P.wrhp = (1-D)^2*R/L;
+
+        P.wis = 1/(C*R);
+
+        P.wid = 2/(C*R);
+
+        P.wz = Rl/L;
+
+        P.w0 = (1-D)/sqrt(L*C);
+
+        P.Q = (1-D)*R*sqrt(C/L);
+
+    case 'buckboost'
+
+        P.wesr = 1/(C*Rc);
+
+        P.wrhp = (1-D)^2*R/(D*L);
+
+        P.wis = 1/(C*R);
+
+        P.wid = (1+D)/(C*R);
+
+        P.wz = Rl/L;
+
+        P.w0 = (1-D)/sqrt(L*C);
+
+        P.Q = (1-D)*R*sqrt(C/L);
+
+end
+%% ==========================================================
+% SMALL SIGNAL TRANSFER FUNCTIONS
+%% ==========================================================
+
+s = tf('s');
+
+
+%% Common denominator
+
+Den = 1 + s/(P.Q*P.w0) + (s/P.w0)^2;
+
+
+
+%% Gvs : Input Voltage to Output Voltage
+
+P.Gvs = P.Kvs*(1+s/P.wesr)/Den;
+
+
+
+%% Gvd : Duty Ratio to Output Voltage
+
+if isinf(P.wrhp)
+
+    % Buck converter (no RHP zero)
+
+    P.Gvd = P.Kvd*(1+s/P.wesr)/Den;
+
+else
+
+    % Boost / Buck-Boost
+
+    P.Gvd = P.Kvd*(1-s/P.wrhp)*(1+s/P.wesr)/Den;
+
+end
+
+
+
+%% Gis : Input Voltage to Inductor Current
+
+P.Gis = P.Kis*(1+s/P.wis)/Den;
+
+
+
+%% Gid : Duty Ratio to Inductor Current
+
+P.Gid = P.Kid*(1+s/P.wid)/Den;
+
+
+
+%% Zp : Output Impedance
+
+P.Zp = P.Kp*(1+s/P.wz)*(1+s/P.wesr)/Den;
+
+
+
+%% Zq : Input Impedance
+
+P.Zq = P.Kq*(1+s/P.wesr)/Den;
+
+
+
+%% Display Transfer Functions
+
+disp(' ');
+disp('========================================');
+disp('Small Signal Models');
+disp('========================================');
+
+disp('Gvs(s) = ');
+P.Gvs
+
+disp('Gvd(s) = ');
+P.Gvd
+
+disp('Gis(s) = ');
+P.Gis
+
+disp('Gid(s) = ');
+P.Gid
+
+disp('Zp(s) = ');
+P.Zp
+
+disp('Zq(s) = ');
+P.Zq
+
+disp('========================================');
+
+%% Display
+
+disp(' ');
+disp('========================================');
+disp('Converter Parameters');
+disp('========================================');
+
+fprintf('Duty Ratio D          = %.5f\n',P.D);
+
+fprintf('Kvs                   = %.5f\n',P.Kvs);
+fprintf('Kvd                   = %.5f\n',P.Kvd);
+fprintf('Kis                   = %.5f\n',P.Kis);
+fprintf('Kid                   = %.5f\n',P.Kid);
+
+fprintf('Kp                    = %.5f\n',P.Kp);
+fprintf('Kq                    = %.5f\n',P.Kq);
+
+fprintf('\n');
+
+fprintf('wesr (rad/s)          = %.3f\n',P.wesr);
+
+if isinf(P.wrhp)
+    fprintf('wrhp                  = Inf\n');
+else
+    fprintf('wrhp (rad/s)          = %.3f\n',P.wrhp);
+end
+
+fprintf('wis  (rad/s)          = %.3f\n',P.wis);
+fprintf('wid  (rad/s)          = %.3f\n',P.wid);
+fprintf('wz   (rad/s)          = %.3f\n',P.wz);
+fprintf('w0   (rad/s)          = %.3f\n',P.w0);
+
+fprintf('Q                     = %.3f\n',P.Q);
+
+disp('========================================');
+
+end
