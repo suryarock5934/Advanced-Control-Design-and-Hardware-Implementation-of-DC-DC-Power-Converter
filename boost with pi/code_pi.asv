@@ -1,0 +1,93 @@
+% DESIGN OF PI CONTROLLER FOR BOOST CONVERTER FOR VOLTAGE LOOP CONTROL
+%% UNCOMPENSATED LOOP
+Tm = 1;
+G_uncomp = Tm*beta*Tp;
+
+figure;
+margin(G_uncomp);
+grid on;
+title('Uncompensated System');
+
+
+%% DESIRED CROSSOVER FREQUENCY
+
+fc =1100;                 z)
+wc = 2*pi*fc;
+
+
+%% PI CONTROLLER DESIGN
+
+% Place PI zero at one-fifth of crossover frequency
+fz = fc/5;
+wz = 2*pi*fz;
+
+% Temporary PI controller
+Kp = 1;
+Ki = Kp*wz;
+
+Tc_temp = Kp + Ki/s;
+
+%% FIND REQUIRED GAIN
+
+Loop_temp = Tc_temp*beta*Tm*Tp;
+
+[mag,~] = bode(Loop_temp,wc);
+mag = squeeze(mag);
+
+K = 1/mag;
+
+%% FINAL PI CONTROLLER
+
+Kp = K*Kp;
+Ki = K*Ki;
+
+Tc = Kp + Ki/s;
+
+fprintf('\nFinal PI Parameters\n');
+fprintf('Kp = %.6f\n',Kp);
+fprintf('Ki = %.6f\n',Ki);
+
+%% FINAL OPEN LOOP
+
+G_final = Tc*beta*Tm*Tp;
+
+figure;
+margin(G_final);
+grid on;
+title('Compensated Open-Loop');
+
+
+%% STABILITY MARGINS
+
+[GM,PM,Wcg,Wcp] = margin(G_final);
+
+fprintf('\nGain Margin  = %.2f dB\n',20*log10(GM));
+fprintf('Phase Margin = %.2f deg\n',PM);
+
+%% CLOSED-LOOP TRANSFER FUNCTION
+
+Tcl = feedback(G_final,1);
+
+%% OPEN-LOOP POLES & ZEROS
+
+disp('Open-Loop Poles')
+disp(pole(G_final))
+
+disp('Open-Loop Zeros')
+disp(zero(G_final))
+
+%% CLOSED-LOOP POLES & ZEROS
+
+disp('Closed-Loop Poles')
+disp(pole(Tcl))
+
+disp('Closed-Loop Zeros')
+disp(zero(Tcl))
+
+%% POLE-ZERO MAP
+
+
+figure;
+pzmap(Tcl);
+grid on;
+title('Closed-Loop Pole-Zero Map');
